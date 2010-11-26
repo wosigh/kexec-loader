@@ -1,0 +1,352 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>kexec-loader manual</title>
+<style type="text/css">
+<!--
+body {
+	font-family: Arial, Helvetica, sans-serif;
+}
+h1, h1 a:hover {
+	font-size: xx-large;
+	color: #0099FF;
+}
+h2, h2 a:hover {
+	color: #0066FF;
+}
+h3, h3 a:hover {
+	color: #0033CC;
+}
+a:link, a:visited {
+	text-decoration: none;
+	color: blue;
+}
+a:hover {
+	color: red;
+}
+.code {
+	background-color: #E5E5E5;
+	border: 1px solid #000000;
+	padding: 5px;
+	font-family: monospace;
+}
+-->
+</style>
+</head>
+
+<body>
+<h1>kexec-loader manual</h1>
+<p>Version: 2.2.1</p>
+<p>Copyright &copy; 2007-2010 Daniel Collins<br />Copyright &copy; 2008-2009 Philip Kent</p>
+<ul>
+	<li><a href="#s1">1. Introduction</a></li>
+	<li><a href="#s2">2. Usage</a>
+	<ul>
+		<li><a href="#s2s1">2.1. Basic Configuration</a></li>
+		<li><a href="#s2s2">2.2. GRUB Integration</a></li>
+		<li><a href="#s2s3">2.3. Kernel Modules</a></li>
+		<li><a href="#s2s4">2.4. Changing the keymap</a></li>
+		<li><a href="#s2s5">2.5. Shell</a></li>
+	</ul>
+	</li>
+	<li><a href="#s3">3. Reference</a>
+	<ul>
+		<li><a href="#s3s1">3.1. Configuration Reference</a></li>
+		<li><a href="#s3s2">3.2. Shell Reference</a></li>
+	</ul>
+	</li>
+	<li><a href="#s4">4. Support</a>
+	<ul>
+		<li><a href="#s4s1">4.1. Website</a></li>
+		<li><a href="#s4s2">4.2. Developer</a></li>
+	</ul>
+	</li>
+</ul>
+
+<h2><a name="s1">1. Introduction</a></h2>
+<p>
+kexec-loader is a Linux based bootloader that allows you to boot Linux and multiboot systems from storage devices your BIOS does not support, such as USB drives and PCI expansion cards. It fits on a 1.44MB floppy, supports most block devices supported by Linux and is easy to use. kexec-loader supports reading GRUB configuration files, this allows kexec-loader to be used as a drop-in replacement for GRUB by merely setting the GRUB installation path.
+</p>
+<p>
+If you need to build or modify kexec-loader for some reason please see the build.html file in the source archive, this details how to compile kexec-loader and build disk images.
+</p>
+
+<h2><a name="s2">2. Usage</a></h2>
+<h3><a name="s2s1">2.1. Basic Configuration</a></h3>
+<p>
+On startup kexec-loader looks for a configuration file named kexec-loader.conf in the root directory of the boot disk. If it does not exist it will attempt to load kxloader.cfg instead, this is to allow writing a configuration file on systems that only support 8.3 filenames such as DOS.
+</p>
+<p>
+The configuration file below shows how to boot a simple Linux system with two kernel versions installed. Each target beginning with a title line will be displayed on the boot menu. If no key is pressed within 10 seconds the second entry will be booted automatically. If there are no targets with a default line the first one will be booted.
+</p>
+<p class="code">
+timeout 10<br />
+<br />
+title Generic Linux System (Kernel 2.6.20)<br />
+root hda1<br />
+kernel /boot/vmlinuz-2.6.20<br />
+cmdline root=/dev/hda1 ro<br />
+initrd /boot/initrd.img-2.6.20<br />
+<br />
+title Generic Linux System (Kernel 2.6.21)<br />
+root hda1<br />
+kernel /boot/vmlinuz-2.6.21<br />
+cmdline root=/dev/hda1 ro<br />
+initrd /boot/initrd.img-2.6.21<br />
+default
+</p>
+<p>
+The next example does the same thing, but demonstrates how to specify a disk as part of the filename, this can be used to load files from disks other than the one specified on the root line. Directives that take a path and are not part of a target definition must specify the disk.
+</p>
+<p class="code">
+timeout 10<br />
+<br />
+title Generic Linux System (Kernel 2.6.20)<br />
+root hda1<br />
+kernel /boot/vmlinuz-2.6.20<br />
+cmdline root=/dev/hda1 ro<br />
+initrd <b>(hda1)</b>/boot/initrd.img-2.6.20<br />
+<br />
+title Generic Linux System (Kernel 2.6.21)<br />
+root hda1<br />
+kernel /boot/vmlinuz-2.6.21<br />
+cmdline root=/dev/hda1 ro<br />
+initrd <b>(hda1)</b>/boot/initrd.img-2.6.21<br />
+default
+</p>
+<p>
+It is also possible to reference a disk by its volume label or UUID, this may be useful in cases where the device name may change, for example a USB drive which is used on multiple machines. The following example shows how to use both, you can also use the LABEL/UUID syntax in filenames.
+</p>
+<p class="code">
+root LABEL=disklabel<br />
+root UUID=75ac0d6c-5dc0-402f-9f0f-9ab313816439
+</p>
+<h3><a name="s2s2">2.2. GRUB Integration</a></h3>
+<p>
+If you have a GRUB installation, kexec-loader can load its configuration. To use it you simply need to set the path of your GRUB install directory (containing menu.lst and device.map) in kexec-loader.conf:
+</p>
+<p class="code">
+grub-path (hda1)/boot/grub
+</p>
+<p>
+On startup kexec-loader will read the list of GRUB devices from devices.map, it will use these to convert the BIOS disk numbers in menu.lst to Linux device names. All bootable entries in menu.lst will then be loaded and added to the boot menu. It will also load the default and timeout options from menu.lst if they are not specified in kexec-loader.conf.
+</p>
+<p>
+If you want to override the device mappings in device.map, for example if GRUB is installed to a USB drive which is used on multiple machines, you can use the <b>grub-map</b> directive in kexec-loader.conf to specify new mappings. There are two types of device mappings possible, which are shown below.
+</p>
+<p class="code">
+grub-map hd0 sda<br />
+grub-map hd1,0 sda2
+</p>
+<p>
+The first line maps the first BIOS disk (hd0) to Linux disk sda. The second line maps the first partition of the second BIOS disk (hd1,0) to the second partition on Linux disk sda. When mapping single partitions you can use the UUID/LABEL syntax as shown below.
+</p>
+<p class="code">
+grub-map hd0,0 LABEL=boot<br />
+grub-map hd0,2 LABEL=root
+</p>
+<h3><a name="s2s3">2.3. Kernel Modules</a></h3>
+<p>
+If you are running a modular kernel (All official builds use a modular kernel) you can load modules to support hardware, filesystems and encodings not supported by the base kernel. To install a module copy it to the modules directory on the boot disk, if the module is required to access the boot disk you can create a directory called modules in the initramfs and copy it there. One or more modules may be packaged in a tar file, or an LZMA compressed tar file with the .tlz extension.
+</p>
+<p>
+If you need to add modules to the initramfs, there is a bash script available which will decompress, extract and copy the modules to the initramfs. Modules are decompressed and extracted before being added to the initramfs to maximise the compression of the initramfs file. The script is named addmod.sh and is available in the kexec-loader source archive, it can also be downloaded here: <a href="http://www.solemnwarning.net/kexec-loader/downloads/addmod.sh">addmod.sh</a>.
+</p>
+<p>
+Some modules or hardware combinations may require arguments to be passed to the module, this is usually for ISA and non-PnP hardware. If you have such hardware you can specify arguments to be passed in kexec-loader.conf, these will only be used for modules loaded after kexec-loader.conf.
+</p>
+<p class="code">
+kmod module-name arg1 arg2=value arg3 ...
+</p>
+
+<h3><a name="s2s4">2.4. Changing the keymap</a></h3>
+<p>
+If the file keymap.txt exists on the boot floppy, it will be loaded as the keymap. The official kexec-loader disks do not include a keymap.txt file, so the US kernel keymap will be used.
+</p>
+<p>
+New keymap.txt files can be downloaded <a href="http://www.solemnwarning.net/kexec-loader/keymaps/">here</a>, remember to rename them before use. If your keymap isn't available here, you can use the conv-keymap.pl script from the source download to generate one from a Linux console keymap. (normally found in /usr/share/keymaps)
+</p>
+
+<h3><a name="s2s5">2.5. Shell</a></h3>
+<p>
+There is a shell built into kexec-loader which can be used to configure and boot a target or list/find/read files to aid with configuring a boot target. To access the shell, press C at the menu screen, the shell will be displayed by default if there are no boot targets configured. The commands for configuring and booting a target are very similar to those in the configuration file, as shown below:
+</p>
+<p class="code">
+> root hda1<br />
+> kernel /boot/vmlinuz-2.6.20<br />
+> cmdline root=/dev/hda1 ro<br />
+> initrd /boot/initrd.img-2.6.20<br />
+> <b>boot</b>
+</p>
+<p>
+This example will boot the first target example from the configuration file section, the syntax of the shell is exactly the same except you must type <b>boot</b> at the end to show you have finished configuring the boot target. Filenames may specify a disk at the beginning, just as in the configuration file.
+</p>
+
+<p>
+The <b>ls</b> command lists the contents of a directory, directories have slashes appended to their names. The disk can be omitted from the path in the following example to use the root device.
+</p>
+<p class="code">
+> <b>ls</b> (fd0)/<br />
+ldlinux.sys<br />
+linux.cfg<br />
+kexec-loader.conf<br />
+syslinux.cfg<br />
+README.html<br />
+modules/<br />
+initrd.img<br />
+vmlinuz
+</p>
+
+<p>
+The <b>find</b> command searches directories for files that match a pattern, the pattern may contain the * and ? wildcards which have the same meaning as in most shells. The following example searches the floppy disk for any files containing "linux" in their name. The path can be omitted to search the entire disk once a root device has been selected.
+</p>
+<p class="code">
+> <b>find</b> *linux* (fd0)/<br />
+(fd0)/ldlinux.sys<br />
+(fd0)/linux.cfg<br />
+(fd0)/syslinux.cfg
+</p>
+
+<h2><a name="s3">3. Reference</a></h2>
+<h3><a name="s3s1">3.1. Configuration Reference</a></h3>
+<p>
+The configuration file must be named kexec-loader.conf or kxloader.cfg, kexec-loader.conf will be checked for first. The file may be in UNIX or DOS format. Each line may contain a single directive, where the name and value are seperated by spaces/tabs. Lines beginning with a hash (#) symbol are treated as comments.
+</p>
+
+<p>The following directives are supported:</p>
+<ul>
+	<li><b>timeout &lt;off|integer&gt;</b><br />
+	Number of seconds to wait at the menu screen before booting the default target, the first target will be booted if none are marked as default. The default is "off" which will make the menu wait forever.
+	</li>
+	
+	<li><b>grub-path &lt;path&gt;</b><br />
+	Load device.map and menu.lst from a GRUB installation at this directory. You must specify a device.
+	</li>
+	
+	<li><b>grub-map &lt;GRUB device&gt; &lt;device&gt;</b><br />
+	Map a GRUB device, hd0 => sda will map the disk hd0 to sda whereas hd0,a => sda5 will map BSD partition a on hd0 to sda5, kexec-loader does not support BSD disklabels so you will need to map any BSD partitions you intend to boot. Mappings in kexec-loader.conf will overrule those in device.map.
+	</li>
+	
+	<li><b>kmod &lt;module&gt; &lt;args&gt;</b><br />
+	Set options to be passed to a kernel module if it is loaded.
+	</li>
+</ul>
+
+<p>The following directives are per-target:</p>
+<ul>
+	<li><b>title &lt;text&gt;</b><br />
+	Set the target title, all targets must begin with a title directive.
+	</li>
+	
+	<li><b>root &lt;device&gt;</b><br />
+	Set the root device, you must specify a root device, even if all paths specify their own device.
+	</li>
+	
+	<li><b>kernel &lt;path&gt;</b><br />
+	Path to the kernel, all targets must specify a kernel.
+	</li>
+	
+	<li><b>initrd &lt;path&gt;</b><br />
+	Path to an initrd/initramfs.
+	</li>
+	
+	<li><b>cmdline &lt;text&gt;</b><br />
+	Set the command line which will be passed to the target kernel.
+	</li>
+	
+	<li><b>append &lt;text&gt;</b><br />
+	Set the kernel command line using --append, this appears to do exactly
+	the same thing as cmdline, but is implemented for completeness.
+	</li>
+	
+	<li><b>module &lt;path&gt; [args]</b><br />
+	Load and pass a multiboot module to the target kernel.
+	</li>
+	
+	<li><b>default</b><br />
+	Mark this target as the default.
+	</li>
+	
+	<li><b>reset-vga</b><br />
+	Reset the VGA adaptor before starting the kernel, may be useful if you get garbled or no output on bootup.
+	</li>
+</ul>
+<p>
+Where parameters are shown in &lt;angled brackets&gt;, they are required for that directive. Ones in [square brackets] are optional.
+</p>
+
+<h3><a name="s3s2">3.2. Shell Reference</a></h3>
+<p>
+The kexec-loader shell is designed to closely mimic a traditional UNIX shell, except the parsing is far simpler. Escaping or quoting spaces is unnecassary as the parser only breaks at spaces if the command is expecting multiple arguments, therefor if a command takes multiple arguments only the last one may contain spaces.
+</p>
+<ul>
+	<li><b>root &lt;device&gt;</b><br />
+	Set the root device, you must specify a root device to boot.
+	</li>
+	
+	<li><b>kernel &lt;path&gt;</b><br />
+	Path to the kernel, you must specify a kernel.
+	</li>
+	
+	<li><b>initrd &lt;path&gt;</b><br />
+	Path to an initrd/initramfs.
+	</li>
+	
+	<li><b>cmdline &lt;text&gt;</b><br />
+	Set the command line which will be passed to the target kernel.
+	</li>
+	
+	<li><b>append &lt;text&gt;</b><br />
+	Set the kernel command line using --append, this appears to do exactly
+	the same thing as cmdline, but is implemented for completeness.
+	</li>
+	
+	<li><b>module &lt;path&gt; [args]</b><br />
+	Load and pass a multiboot module to the target kernel.
+	</li>
+	
+	<li><b>reset-vga</b><br />
+	Reset the VGA adaptor before starting the kernel, may be useful if you get garbled or no output on bootup.
+	</li>
+	
+	<li><b>boot</b><br />
+	Boot the system using settings entered in the shell.
+	</li>
+	
+	<li><b>disks</b><br />
+	Display a list of disks and partitions which have been detected by Linux.
+	</li>
+	
+	<li><b>ls &lt;directory&gt;</b><br />
+	List the contents of a directory.
+	</li>
+	
+	<li><b>find &lt;filename&gt; &lt;directory&gt;</b><br />
+	Search a directory for files matching the pattern 'filename', filename may include the wildcard characters * or ?.
+	</li>
+	
+	<li><b>cat &lt;filename&gt;</b><br />
+	Print the contents of a file to the console.
+	</li>
+	
+	<li><b>exit</b>
+	<br />Leave the shell and go back to the menu.
+	</li>
+</ul>
+
+<h2><a name="s4">4. Support</a></h2>
+<h3><a name="s4s1">4.1. Website</a></h3>
+<p>
+For information on kexec-loader, including current development and latest
+releases, please see the project <a href="http://www.solemnwarning.net/kexec-loader/">website</a>.
+</p>
+
+<h3><a name="s4s2">4.2. Developer</a></h3>
+<p>
+The developer of kexec-loader, Daniel Collins (aka solemnwarning), can often be
+found on the Freenode IRC network. To contact solemnwarning, you can use the
+following e-mail address: <em>solemnwarning@solemnwarning.net</em>.
+</p>
+</body>
+</html>
